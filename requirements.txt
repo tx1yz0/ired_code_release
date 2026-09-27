@@ -1,0 +1,13 @@
+torch==2.14.0
+torchvision==0.29.0
+einops==0.8.2
+accelerate==1.15.0
+ema-pytorch==0.8.3
+scipy==1.17.1
+numpy==2.4.6
+pandas==3.0.6
+matplotlib==3.11.2
+pillow==12.3.0
+tqdm==4.70.1
+tabulate==0.10.0
+ipdb==0.13.13
