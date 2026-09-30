@@ -1,6 +1,8 @@
 # AWS Sudoku training
 
-> **Historical run configuration:** do not reuse this launcher as a paper reproduction. The IRED paper specifies 50,000 updates on one GPU with a total batch of 64. This launcher ran 1.3 million updates on eight GPUs with a total batch of 512. The recovered journal shows that validation peaked at step 10,000 (99.5534% blank-cell accuracy; 95.3% strict board consistency), then overfit and collapsed near step 636,102. See [AWS_SUDOKU_RUN_REPORT.md](AWS_SUDOKU_RUN_REPORT.md) for the full curve, cost, and failure analysis.
+> **Historical run configuration:** do not reuse this launcher as a paper reproduction. The IRED paper specifies 50,000 updates on one GPU with a total batch of 64. This launcher ran 1.3 million updates on eight GPUs with a total batch of 512. The recovered journal shows that the repeated test diagnostic peaked at step 10,000 (99.5534% blank-cell accuracy; 95.3% strict board consistency), then developed a widening generalization gap and collapsed near step 636,102. See [AWS_SUDOKU_RUN_REPORT.md](AWS_SUDOKU_RUN_REPORT.md) for the full curve, cost, and failure analysis.
+
+The consolidated operational guide is [IRED Sudoku on AWS - Run Retrospective and Next-Run Playbook](output/pdf/IRED_Sudoku_AWS_Next_Run_Playbook.pdf).
 
 ## Run configuration
 

@@ -3,15 +3,17 @@
 **Report date:** 30 September 2026  
 **Region:** us-east-1  
 **Training status:** completed at step 1,300,000; final checkpoint verified  
-**Performance verdict:** paper-comparable blank-cell accuracy appeared early, followed by overfitting and numerical collapse
+**Performance verdict:** strong early diagnostic performance, followed by a widening generalization gap and numerical collapse
+
+**Next-run guide:** [IRED Sudoku on AWS - Run Retrospective and Next-Run Playbook](output/pdf/IRED_Sudoku_AWS_Next_Run_Playbook.pdf)
 
 ## Executive summary
 
 The AWS run reached its planned 1.3 million training steps and wrote the final checkpoint, `results/ds_sudoku/model_sudoku_diffsteps_10/model-1300.pt`. A follow-up evaluation of 256 held-out SATNet puzzles measured only **11.1164% accuracy on blank cells**, **0% fully consistent Sudoku boards**, and a **0% SAT-Net board score**. That final checkpoint was effectively at the 1-in-9 uniform-guess reference.
 
-The recovered training journal changes the diagnosis: the model **did learn successfully at first**. At step 10,000 it reached **99.5534% blank-cell accuracy** and **95.3% strict valid-board consistency** across all 1,000 held-out SATNet puzzles. These were the best recorded results, and the blank-cell figure is close to the paper's reported 99.4%. Validation then declined while the training batch remained at 100%, proving overfitting. Near step 636,102 the loss rose above `1e20`; by step 640,000 validation was at chance and never recovered. The launcher continued because it had no early stopping, best-checkpoint retention, or divergence guard.
+The recovered training journal changes the diagnosis: the model **did learn successfully at first**. At step 10,000 it reached **99.5534% blank-cell accuracy** and **95.3% strict valid-board consistency** across all 1,000 SATNet test puzzles. The direct exact-grid solve rate was not logged, and the paper does not clearly map its reported 99.4% to the released metrics. Test performance then declined while the sampled training batch remained at 100%, showing a widening generalization gap consistent with severe overfitting. Near step 636,102 the loss rose above `1e20`; by step 640,000 performance was at chance and never recovered. The launcher continued because it had no early stopping, best-checkpoint retention, or divergence guard.
 
-The run was not a reproduction of the paper's optimization protocol. The paper specifies 50,000 updates on one RTX 2080 with a total batch of 64 and Adam at `1e-4`. The AWS launcher used 1.3 million updates on eight A100s with 64 examples per process, making the total batch 512 at the same learning rate. It made 26 times as many optimizer updates and presented about 208 times as many training examples as the paper. The changed batch shifted the useful checkpoint much earlier, and the excessive schedule destroyed it.
+The run was not a reproduction of the paper's optimization protocol. The paper specifies 50,000 updates on one RTX 2080 with a total batch of 64 and Adam at `1e-4`. The AWS launcher used 1.3 million updates on eight A100s with 64 examples per process, making the total batch 512 at the same learning rate. It made 26 times as many optimizer updates and presented about 208 times as many training examples as the paper. The early peak occurred near comparable sample exposure, and prolonged optimization preceded the degradation and collapse; no controlled batch or schedule ablation has isolated their individual effects.
 
 The training host was a `p4d.24xlarge` Spot instance with eight A100 GPUs. Cost Explorer recorded **45.198333 Spot instance-hours** and **$824.41 gross p4d compute charges**. Credits exactly offset the recorded p4d charges. The original instance is stopped, but its 100 GB EBS root volume remains attached, so storage charges can continue after this report's billing cutoff.
 
@@ -29,7 +31,7 @@ The p4d launched at 08:36 UTC on 27 September. Its Spot usage ended after the ta
 
 ## Performance evaluation
 
-The final checkpoint was loaded on a temporary validation clone. The test ran four batches covering 256 puzzles from the held-out SATNet validation split and exited successfully.
+The final checkpoint was loaded on a temporary validation clone. The test ran four batches covering 256 puzzles from the SATNet test split, which this trainer labels as validation, and exited successfully.
 
 | Metric | Result | Interpretation |
 |---|---:|---|
@@ -65,7 +67,7 @@ With the local first 2,000 updates included, the AWS run reached the paper's 3.2
 
 ![AWS Sudoku validation history](aws/sudoku_validation_curve.png)
 
-The recovered system journal contains corrected full-batch metrics for all 1,000 SATNet validation puzzles every 10,000 steps:
+The recovered system journal contains corrected full-batch metrics for all 1,000 SATNet test puzzles every 10,000 steps. The trainer repeatedly used this paper test split as validation, so the history is diagnostic rather than an unbiased checkpoint-selection record:
 
 | Step | Blank-cell accuracy | Strict consistency | Sum-based `board_accuracy` | State |
 |---:|---:|---:|---:|---|
@@ -93,7 +95,7 @@ The rolling two-checkpoint policy then deleted the useful early checkpoints. The
 
 ### The starting checkpoint was healthy
 
-A separate diagnostic loaded the EMA weights from the local step-2,000 checkpoint and sampled the first eight puzzles from the unchanged SATNet validation split with the corrected evaluator. With a fixed seed, it measured **72.7528% blank-cell accuracy**, 0% fully consistent boards, and a 3.0864% sum-based board score. Every sampled output was finite. This small stochastic diagnostic agrees with the recovered journal: training began normally and improved sharply before validation peaked at step 10,000.
+A separate diagnostic loaded the EMA weights from the local step-2,000 checkpoint and sampled the first eight puzzles from the unchanged SATNet test split with the corrected evaluator. With a fixed seed, it measured **72.7528% blank-cell accuracy**, 0% fully consistent boards, and a 3.0864% sum-based board score. Every sampled output was finite. This small stochastic diagnostic agrees with the recovered journal: training began normally and improved sharply before the recorded test diagnostic peaked at step 10,000.
 
 ### The paper and released code are internally inconsistent
 
@@ -128,24 +130,24 @@ The reported training compute cost is substantially below the earlier 56-hour Sp
 
 ## Conclusion and pitfalls
 
-- **The modeling objective succeeded early.** At step 10,000, the model reached 99.5534% blank-cell accuracy and 95.3% strict consistency on the full 1,000-puzzle validation split. This is the checkpoint that should have been selected.
+- **The model reached a useful early state.** At step 10,000, it reached 99.5534% blank-cell accuracy and 95.3% strict consistency on all 1,000 SATNet test puzzles. That checkpoint should have been retained for diagnosis, but selecting it after repeated test-set inspection would not constitute an unbiased paper result.
 - **The final artifact failed because training continued.** Validation overfit for hundreds of thousands of steps, the loss exploded near step 636,102, and the retained final model was at chance.
-- **The run did not follow the paper's optimization protocol.** The 26× longer schedule and 8× larger total batch shifted the useful stopping point and made the result an unreliable reproduction of the paper's reported experiment.
+- **The run did not follow the paper's optimization protocol.** The 26× longer schedule and 8× larger total batch changed the trajectory enough that this is not a reliable reproduction of the paper's reported experiment.
 - **The released repository is not sufficient for exact reproduction.** Its training length and architecture disagree with the paper, and its original validation path is incorrect for batched predictions.
 - **Training-batch success hid held-out degradation.** Training metrics stayed at 100% while strict validation consistency fell from 95.3% into the low 30s. Checkpoint selection must use held-out boards.
-- **The recovered validation history covers all 1,000 SATNet validation puzzles.** The separate final-checkpoint confirmation covered 256 puzzles and agreed with the full journal result. The 18,000-puzzle RRN test and multi-seed evaluation were not run.
+- **The recovered history covers all 1,000 SATNet test puzzles.** The separate final-checkpoint confirmation covered 256 puzzles and agreed with the full journal result. The 18,000-puzzle RRN test and multi-seed evaluation were not run.
 - **Chance comparison is only a reference.** 11.111% assumes uniform random choice among nine digits. It is not a measured baseline for this exact subset and does not diagnose why the model failed.
 - **The reported `board_accuracy` name can mislead.** In this implementation it is a SAT-Net sum-based validity score, not the proportion of boards exactly equal to the answer. Use it alongside the stricter consistency metric and a direct solved-board rate.
 - **The cost record is time-limited and partly account-scoped.** AWS billing data can arrive later, EBS and IPv4 usage were not resource-tagged in this query, and the retained root volume may continue to bill.
 
-For a future attempt, train from scratch on one GPU with total batch 64, Adam `1e-4`, a fixed seed, and at most 50,000 updates. Save a permanent best checkpoint using full held-out strict consistency, validate at least every 1,000 updates, and stop after sustained degradation. Abort and roll back on non-finite values or a large loss excursion. Retain the full metric history and record both online and EMA model health. Run the 18,000-puzzle RRN test only after selecting the best SATNet checkpoint. An A/B run of the paper's 3×3 final convolution and the release's 1×1 convolution is needed to resolve that architecture conflict.
+For a future attempt, first use a development split carved from the 9,000 training boards to validate metrics, guardrails, and the operating procedure. Then lock the protocol and retrain from scratch on all 9,000 boards using one GPU, global batch 64, Adam `1e-4`, fixed seeds, and the paper's 50,000-update endpoint. Keep the 1,000 SATNet test boards untouched until one final evaluation per seed, with direct exact-grid solve rate as the primary metric. Abort and preserve forensics on non-finite values or a sustained loss excursion. Retain pinned milestones, last-known-good, and final checkpoints off-instance. Run RRN only after configuration selection. An A/B run of the paper's 3×3 final convolution and the release's 1×1 convolution is needed to resolve that architecture conflict.
 
 ## Evidence and method
 
 - Repository configuration: `aws/run_sudoku.sh`, `AWS_TRAINING.md`, `sat_dataset.py`, and `diffusion_lib/denoising_diffusion_pytorch_1d.py`.
 - AWS checks: EC2 instance/volume and Spot request state; CloudTrail launch/stop/clone events; Cost Explorer usage and `Credit` records; AWS Price List API for the two validation host rates.
-- Evaluation results: final step-1,300,000 checkpoint, 256 SATNet validation puzzles, four batches; final metrics reported by the repository's Sudoku evaluator.
+- Evaluation results: final step-1,300,000 checkpoint, 256 SATNet test puzzles, four batches; final metrics reported by the repository's Sudoku evaluator.
 - Recovered training history: the complete system journal from the stopped p4d root volume, parsed into `aws/sudoku_validation_history.csv`; visualization in `aws/sudoku_validation_curve.png`.
 - Checkpoint integrity audit: steps 1,299,000 and 1,300,000 loaded on an isolated temporary host; model, EMA, and optimizer tensors checked for non-finite values and final parameter states compared directly.
 - Reproduction comparison: the [IRED paper](https://energy-based-model.github.io/ired/ired.pdf), the authors' [released repository](https://github.com/yilundu/ired_code_release), and the [SATNet paper](https://proceedings.mlr.press/v97/wang19e/wang19e.pdf).
-- Local checkpoint diagnostic: EMA at step 2,000, first eight SATNet validation puzzles, fixed seed, corrected full-batch metric.
+- Local checkpoint diagnostic: EMA at step 2,000, first eight SATNet test puzzles, fixed seed, corrected full-batch metric.
