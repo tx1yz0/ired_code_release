@@ -1,5 +1,7 @@
 # AWS Sudoku training
 
+> **Historical run configuration:** do not reuse this launcher as a paper reproduction. The IRED paper specifies 50,000 updates on one GPU with a total batch of 64. This launcher ran 1.3 million updates on eight GPUs with a total batch of 512. See [AWS_SUDOKU_RUN_REPORT.md](AWS_SUDOKU_RUN_REPORT.md) for the completed run, performance, cost, and failure analysis.
+
 ## Run configuration
 
 On an 8-GPU EC2 host, run:
